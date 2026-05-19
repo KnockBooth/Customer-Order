@@ -102,7 +102,9 @@ html[dir="rtl"] .cal-hd{letter-spacing:0}
 .cal-day.past{color:var(--text4);cursor:default;opacity:.4}
 .cal-day.booked{color:var(--text4);cursor:not-allowed}
 .cal-day.booked::after{content:'';position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--red2)}
-.cal-day.partial::after{content:'';position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--accent2)}
+/* one booth booked → yellow dot (overrides red, whether selectable or not) */
+.cal-day.partial::after{content:'';position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--yellow2)}
+.cal-day.booked.partial::after{background:var(--yellow2)}
 .cal-day.selected{background:var(--accent);color:var(--bg);font-weight:700;border-color:var(--accent)}
 .cal-day.today{border-color:var(--border2)}
 .cal-loading{text-align:center;padding:20px;color:var(--text3);font-size:13px}
@@ -193,6 +195,16 @@ html[dir="rtl"] .btn{letter-spacing:0}
 .legend-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
 .payment-section{margin-top:16px}
 .mysr-form{margin-top:12px}
+
+/* Large booth per-drink qty rows */
+.drink-qty-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);gap:8px}
+.drink-qty-row:last-child{border-bottom:none}
+.dqr-info{flex:1}
+.dqr-name{font-size:13px;font-weight:500;margin-bottom:2px}
+.dqr-price{font-size:11px;color:var(--text4)}
+.large-total-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0 0;margin-top:4px;border-top:1px solid var(--border);font-size:13px;font-weight:600;color:var(--text2)}
+/* Limit notices */
+.limit-note{font-size:12px;color:var(--accent2);padding:8px 10px;background:rgba(44,20,8,.06);border:1px solid var(--border);border-radius:var(--rs);margin-bottom:10px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -249,7 +261,8 @@ html[dir="rtl"] .btn{letter-spacing:0}
     </div>
     <div class="legend">
       <span class="legend-item"><span class="legend-dot" style="background:var(--accent)"></span><span data-i18n="legendSelected">محدد</span></span>
-      <span class="legend-item"><span class="legend-dot" style="background:var(--red2)"></span><span data-i18n="legendBooked">محجوز</span></span>
+      <span class="legend-item"><span class="legend-dot" style="background:var(--yellow2)"></span><span data-i18n="legendPartial">بوث واحد محجوز</span></span>
+      <span class="legend-item"><span class="legend-dot" style="background:var(--red2)"></span><span data-i18n="legendBooked">محجوز (كلا البوثين)</span></span>
       <span class="legend-item"><span class="legend-dot" style="background:var(--text4);opacity:.5"></span><span data-i18n="legendUnavail">غير متاح</span></span>
     </div>
     <div id="err-date-booked" class="err-msg">هذا التاريخ محجوز. الرجاء اختيار تاريخ آخر.</div>
@@ -265,19 +278,30 @@ html[dir="rtl"] .btn{letter-spacing:0}
 
     <div class="card">
       <div class="card-title" data-i18n="selectDrinks">اختر المشروبات</div>
-      <div class="drinks-grid" id="drinks-grid"></div>
-      <div class="cups-row">
+      <!-- Small booth limit notice -->
+      <div id="small-drinks-note" class="limit-note" style="display:none" data-i18n="smallDrinksNote">يمكنك اختيار نوعين من المشروبات كحد أقصى</div>
+      <!-- Drink items — rendered differently per booth type -->
+      <div id="drinks-grid" class="drinks-grid"></div>
+      <!-- Small booth only: total cups input -->
+      <div class="cups-row" id="cups-row-wrap">
         <div class="cups-label">
           <div style="font-weight:500;margin-bottom:2px" data-i18n="totalCups">إجمالي الكوبات</div>
           <div style="font-size:11px;color:var(--text4)" id="min-cups-label"></div>
         </div>
         <div class="cups-input-wrap">
           <button class="cups-btn" onclick="adjCups(-10)">−</button>
-          <input  class="cups-val" type="number" id="cups-input" value="100" min="50" step="10" oninput="recalc()" id="cups-input"/>
+          <input  class="cups-val" type="number" id="cups-input" value="30" min="30" step="5" oninput="recalc()"/>
           <button class="cups-btn" onclick="adjCups(10)">+</button>
         </div>
       </div>
-      <div id="mix-note" style="font-size:11px;color:var(--accent2);margin-bottom:10px;display:none"></div>
+      <!-- Large booth only: auto total + mix note -->
+      <div id="large-total-wrap" style="display:none">
+        <div class="large-total-row">
+          <span data-i18n="totalCups">إجمالي الكوبات</span>
+          <span id="large-total-cups">0</span>
+        </div>
+        <div id="mix-note" style="font-size:11px;color:var(--accent2);margin-top:6px;display:none"></div>
+      </div>
     </div>
 
     <div class="card">
@@ -285,7 +309,18 @@ html[dir="rtl"] .btn{letter-spacing:0}
         <span data-i18n="sweetTitle">الحلويات</span>
         <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px" data-i18n="sweetOpt"> (اختياري)</span>
       </div>
+      <!-- Small booth limit notice for sweets -->
+      <div id="small-sweets-note" class="limit-note" style="display:none" data-i18n="smallSweetsNote">يمكنك اختيار نوع حلى واحد فقط</div>
       <div id="sweets-list"></div>
+    </div>
+
+    <!-- Gathering section — large booth only -->
+    <div class="card" id="gathering-card" style="display:none">
+      <div class="card-title">
+        <span data-i18n="gatherTitle">التجمعات</span>
+        <span style="color:var(--text4);font-weight:400;text-transform:none;font-size:11px" data-i18n="sweetOpt"> (اختياري)</span>
+      </div>
+      <div id="gathering-list"></div>
     </div>
 
     <div class="card">
@@ -459,10 +494,18 @@ const T = {
     pkgSummary:(cups,names,booth)=>names.length>1
       ? `باقة ضيافة القهوة: ${cups} كوب (مزيج ${names.join(' و')})، ${booth}.`
       : `باقة ضيافة القهوة: ${cups} كوب ${names[0]}، ${booth}.`,
+    smallDrinksNote:'يمكنك اختيار نوعين من المشروبات كحد أقصى للبوث الصغير.',
+    smallSweetsNote:'يمكنك اختيار نوع حلى واحد فقط للبوث الصغير.',
+    errSmallDrinks:'البوث الصغير يدعم نوعين فقط من المشروبات.',
+    errSmallSweets:'البوث الصغير يدعم نوع حلى واحد فقط.',
+    gatherTitle:'تجمعات', gatherLine:(name,qty,price)=>`${name} ×${qty} — ${qty*price} ر.س`,
+    largePriceNote: top => `سعر المزيج يُحتسب بأعلى سعر (${top} ر.س/كوب)`,
     drinks:{
       v60:'V60', espresso:'إسبريسو', coffeeDay:'قهوة اليوم',
       matcha:'ماتشا', hibiscus:'كركديه', brownie:'براونيز',
       marshmallow:'مارشميلو', churro:'تشورو كوكيز',
+      knockCake:'كيك نوك', vanillaPud:'بودينق فانيلا',
+      tiramisu:'تيراميسو', cheesecake:'تشيز كيك توت',
     },
     booth:{ large:'بوث نوك', small:'نوك كورنر' },
     calLocale:'ar-SA',
@@ -520,10 +563,18 @@ const T = {
     pkgSummary:(cups,names,booth)=>names.length>1
       ? `Coffee Catering Package: ${cups} Cups (mix ${names.join(' & ')}), ${booth}.`
       : `Coffee Catering Package: ${cups} Cups ${names[0]}, ${booth}.`,
+    smallDrinksNote:'Small booth supports a maximum of 2 drink types.',
+    smallSweetsNote:'Small booth supports 1 sweet type only.',
+    errSmallDrinks:'Small booth allows up to 2 drink types only.',
+    errSmallSweets:'Small booth allows 1 sweet type only.',
+    gatherTitle:'Gatherings', gatherLine:(name,qty,price)=>`${name} ×${qty} — ${qty*price} SAR`,
+    largePriceNote: top => `Mix priced at highest rate (${top} SAR/cup)`,
     drinks:{
       v60:'V60', espresso:'Espresso', coffeeDay:'Coffee of the Day',
       matcha:'Matcha', hibiscus:'Hibiscus', brownie:'Brownie Bites',
       marshmallow:'Marshmallow', churro:'Churro Cookies',
+      knockCake:'Knock Cake', vanillaPud:'Vanilla Pudding',
+      tiramisu:'Tiramisu', cheesecake:'Blueberry Cheesecake',
     },
     booth:{ large:'Knock Booth', small:'Knock Corner' },
     calLocale:'en-US',
@@ -537,6 +588,8 @@ const ITEMS = {
   v60:        { price:19  }, espresso:   { price:21  }, coffeeDay:  { price:11  },
   matcha:     { price:24  }, hibiscus:   { price:17  }, brownie:    { price:2.4 },
   marshmallow:{ price:2.8 }, churro:     { price:11  },
+  knockCake:  { price:199 }, vanillaPud: { price:235 },
+  tiramisu:   { price:189 }, cheesecake: { price:189 },
 };
 const BOOTH = {
   large:{ price:575, di:900, waiterKnock:108, waiterWomen:600, minCups:100, drinkKeys:['v60','espresso','coffeeDay','matcha','hibiscus'] },
@@ -547,21 +600,29 @@ const SWEETS = {
   marshmallow:{ price: 2.8 },
   churro:     { price: 11  },
 };
+const GATHERING = {
+  knockCake:  { price: 199 },
+  vanillaPud: { price: 235 },
+  tiramisu:   { price: 189 },
+  cheesecake: { price: 189 },
+};
 
 // ═══════════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════════
-let lang          = localStorage.getItem('knock_lang') || 'ar';
-let curStep       = 1;
-let calDate       = new Date();
-let selectedDate  = null;
-let bookedMap     = {}; // { 'YYYY-MM-DD': ['large','small'] }
-let boothType     = 'large';
-let selectedDrinks= [];
-let cups          = 100;
-let waiter        = 'knock'; // large booth default (cannot be 'none')
-let sweetQtys     = { brownie: 0, marshmallow: 0, churro: 0 };
-let suggestedPrice= 0;
+let lang           = localStorage.getItem('knock_lang') || 'ar';
+let curStep        = 1;
+let calDate        = new Date();
+let selectedDate   = null;
+let bookedMap      = {}; // { 'YYYY-MM-DD': ['large','small'] }
+let boothType      = 'large';
+let selectedDrinks = [];  // small booth: selected drink keys
+let cups           = 30;  // small booth: total cups
+let drinkQtys      = { v60:0, espresso:0, coffeeDay:0, matcha:0, hibiscus:0 }; // large booth
+let waiter         = 'knock'; // large booth default (cannot be 'none')
+let sweetQtys      = { brownie: 0, marshmallow: 0, churro: 0 };
+let gatheringQtys  = { knockCake: 0, vanillaPud: 0, tiramisu: 0, cheesecake: 0 };
+let suggestedPrice = 0;
 
 const g = id => document.getElementById(id);
 const t = key => T[lang][key];
@@ -616,6 +677,7 @@ function applyLang() {
   renderCalendar();
   renderDrinks();
   renderSweets();
+  renderGathering();
   recalc();
 
   // Error visibility (keep shown/hidden, just update text)
@@ -670,7 +732,14 @@ function tryStep2() {
 
 function tryStep3() {
   g('err-pkg').classList.remove('show');
-  if (!selectedDrinks.length || cups < BOOTH[boothType].minCups) {
+  let valid = true;
+  if (boothType === 'large') {
+    const totalCups = BOOTH.large.drinkKeys.reduce((s,k) => s+(drinkQtys[k]||0), 0);
+    if (totalCups < BOOTH.large.minCups) valid = false;
+  } else {
+    if (!selectedDrinks.length || cups < BOOTH.small.minCups) valid = false;
+  }
+  if (!valid) {
     g('err-pkg').textContent = t('errPkg')();
     g('err-pkg').classList.add('show');
     return;
@@ -741,10 +810,23 @@ function renderCalendar() {
     el.className = 'cal-day';
     el.textContent = d;
     if (ds === todayStr()) el.classList.add('today');
-    const isBooked = (bookedMap[ds] || []).includes(boothType);
-    if (ds < min) { el.classList.add('past'); }
-    else if (isBooked) { el.classList.add('booked'); el.title = tr.legendBooked; }
-    else {
+    const booths        = bookedMap[ds] || [];
+    const bothBooked    = booths.length >= 2;
+    const thisBoothBooked = booths.includes(boothType);
+    const oneBooked     = booths.length === 1;
+    if (ds < min) {
+      el.classList.add('past');
+    } else if (bothBooked) {
+      // Both booths taken → red, fully unavailable
+      el.classList.add('booked');
+      el.title = tr.legendBooked;          // "محجوز (كلا البوثين)"
+    } else if (thisBoothBooked) {
+      // Only this booth taken → yellow + unselectable
+      el.classList.add('booked', 'partial');
+      el.title = tr.legendPartial;         // "بوث واحد محجوز"
+    } else {
+      // Available for this booth; mark yellow if the OTHER booth is taken
+      if (oneBooked) el.classList.add('partial');
       if (ds === selectedDate) el.classList.add('selected');
       el.onclick = () => pickDay(ds);
     }
@@ -849,7 +931,28 @@ function setBooth(type) {
   boothType = type;
   g('bt-large').classList.toggle('active', type === 'large');
   g('bt-small').classList.toggle('active', type === 'small');
-  selectedDrinks = selectedDrinks.filter(k => BOOTH[type].drinkKeys.includes(k));
+
+  // Clear drink state when switching
+  if (type === 'large') {
+    selectedDrinks = [];
+    cups = BOOTH.large.minCups;
+  } else {
+    drinkQtys = { v60:0, espresso:0, coffeeDay:0, matcha:0, hibiscus:0 };
+    gatheringQtys = { knockCake:0, vanillaPud:0, tiramisu:0, cheesecake:0 };
+    selectedDrinks = selectedDrinks.filter(k => BOOTH[type].drinkKeys.includes(k));
+    cups = Math.max(BOOTH.small.minCups, cups);
+  }
+  sweetQtys = { brownie:0, marshmallow:0, churro:0 };
+
+  // Show/hide UI sections
+  const isLarge = type === 'large';
+  g('cups-row-wrap').style.display    = isLarge ? 'none' : '';
+  g('large-total-wrap').style.display = isLarge ? 'block' : 'none';
+  g('gathering-card').style.display   = isLarge ? 'block' : 'none';
+  g('small-drinks-note').style.display= isLarge ? 'none' : 'block';
+  g('small-sweets-note').style.display= isLarge ? 'none' : 'block';
+  // Switch drinks-grid to list layout for large, grid for small
+  g('drinks-grid').className = isLarge ? '' : 'drinks-grid';
 
   // If the currently selected date is booked for this booth, clear it
   if (selectedDate && (bookedMap[selectedDate] || []).includes(type)) {
@@ -861,70 +964,117 @@ function setBooth(type) {
     errEl.textContent   = t('errBooked');
   }
 
-  // Large booth: waiter is mandatory — hide 'none' option and force 'knock' if needed
+  // Large booth: waiter is mandatory
   const wNoneBtn = g('w-none');
-  if (type === 'large') {
+  if (isLarge) {
     wNoneBtn.style.display = 'none';
-    if (waiter === 'none') { waiter = 'knock'; }
+    if (waiter === 'none') waiter = 'knock';
   } else {
     wNoneBtn.style.display = '';
   }
   ['none','knock','women'].forEach(x => g('w-'+x).classList.toggle('active', x === waiter));
 
-  // Update cups minimum for this booth
-  const minC = BOOTH[type].minCups;
-  const cupsEl = g('cups-input');
-  cupsEl.min = minC;
-  if ((parseInt(cupsEl.value) || 0) < minC) { cupsEl.value = minC; cups = minC; }
-  g('min-cups-label').textContent = lang === 'ar'
-    ? `الحد الأدنى ${minC} كوب`
-    : `Minimum ${minC} cups`;
+  // Update cups minimum for small booth
+  if (!isLarge) {
+    const minC = BOOTH[type].minCups;
+    const cupsEl = g('cups-input');
+    cupsEl.min = minC;
+    if ((parseInt(cupsEl.value)||0) < minC) { cupsEl.value = minC; cups = minC; }
+    g('min-cups-label').textContent = lang === 'ar'
+      ? `الحد الأدنى ${minC} كوب` : `Minimum ${minC} cups`;
+  }
 
   renderCalendar();
-  renderSweets();
   renderDrinks();
+  renderSweets();
+  renderGathering();
   recalc();
 }
 
+// ── LARGE BOOTH: per-drink quantity rows ────────
 function renderDrinks() {
-  const tr = T[lang];
+  const tr   = T[lang];
   const grid = g('drinks-grid');
   grid.innerHTML = '';
-  BOOTH[boothType].drinkKeys.forEach(key => {
-    const price = ITEMS[key].price;
-    const label = tr.drinks[key];
-    const on    = selectedDrinks.includes(key);
-    const card  = document.createElement('div');
-    card.className = 'drink-card' + (on ? ' selected' : '');
-    card.innerHTML = `<div class="drink-check">${on ? '✓' : ''}</div>
-      <div class="drink-name">${label}</div>
-      <div class="drink-price">${price} ${tr.sarUnit} / ${lang==='ar'?'كوب':'cup'}</div>`;
-    card.onclick = () => toggleDrink(key);
-    grid.appendChild(card);
-  });
+
+  if (boothType === 'large') {
+    // Qty spinner for each drink
+    BOOTH.large.drinkKeys.forEach(key => {
+      const qty = drinkQtys[key] || 0;
+      const row = document.createElement('div');
+      row.className = 'drink-qty-row';
+      row.innerHTML = `
+        <div class="dqr-info">
+          <div class="dqr-name">${tr.drinks[key]}</div>
+          <div class="dqr-price">${ITEMS[key].price} ${tr.sarUnit} / ${lang==='ar'?'كوب':'cup'}</div>
+        </div>
+        <div class="cups-input-wrap">
+          <button class="cups-btn" onclick="adjDrinkQty('${key}',-5)">−</button>
+          <input class="cups-val" id="dq-${key}" type="number" value="${qty}" min="0" step="5" oninput="syncDrinkQty('${key}')"/>
+          <button class="cups-btn" onclick="adjDrinkQty('${key}',5)">+</button>
+        </div>`;
+      grid.appendChild(row);
+    });
+  } else {
+    // Small booth: toggle cards, max 2
+    grid.className = 'drinks-grid';
+    BOOTH.small.drinkKeys.forEach(key => {
+      const on   = selectedDrinks.includes(key);
+      const card = document.createElement('div');
+      card.className = 'drink-card' + (on ? ' selected' : '');
+      card.innerHTML = `<div class="drink-check">${on ? '✓' : ''}</div>
+        <div class="drink-name">${tr.drinks[key]}</div>
+        <div class="drink-price">${ITEMS[key].price} ${tr.sarUnit} / ${lang==='ar'?'كوب':'cup'}</div>`;
+      card.onclick = () => toggleDrink(key);
+      grid.appendChild(card);
+    });
+  }
+}
+
+function adjDrinkQty(key, delta) {
+  drinkQtys[key] = Math.max(0, (drinkQtys[key]||0) + delta);
+  const el = g('dq-'+key); if (el) el.value = drinkQtys[key];
+  recalc();
+}
+function syncDrinkQty(key) {
+  drinkQtys[key] = Math.max(0, parseInt(g('dq-'+key).value)||0);
+  recalc();
 }
 
 function toggleDrink(key) {
+  const tr  = T[lang];
   const idx = selectedDrinks.indexOf(key);
-  if (idx > -1) selectedDrinks.splice(idx, 1); else selectedDrinks.push(key);
+  if (idx > -1) {
+    selectedDrinks.splice(idx, 1);
+  } else {
+    if (selectedDrinks.length >= 2) {
+      // Show error, don't add
+      const errEl = g('err-pkg');
+      errEl.textContent = tr.errSmallDrinks;
+      errEl.classList.add('show');
+      setTimeout(() => errEl.classList.remove('show'), 3000);
+      return;
+    }
+    selectedDrinks.push(key);
+  }
+  g('err-pkg').classList.remove('show');
   renderDrinks(); recalc();
 }
 
+// ── SWEETS (both booths; small: max 1 type) ─────
 function renderSweets() {
   const tr   = T[lang];
   const list = g('sweets-list');
   list.innerHTML = '';
   Object.keys(SWEETS).forEach(key => {
-    const price = SWEETS[key].price;
-    const name  = tr.drinks[key];
-    const qty   = sweetQtys[key];
-    const row   = document.createElement('div');
+    const qty  = sweetQtys[key] || 0;
+    const row  = document.createElement('div');
     row.className = 'cups-row';
     row.style.marginBottom = '10px';
     row.innerHTML = `
       <div class="cups-label">
-        <div style="font-weight:500;margin-bottom:2px">${name}</div>
-        <div style="font-size:11px;color:var(--text4)">${price} ${tr.perPiece}</div>
+        <div style="font-weight:500;margin-bottom:2px">${tr.drinks[key]}</div>
+        <div style="font-size:11px;color:var(--text4)">${SWEETS[key].price} ${tr.perPiece}</div>
       </div>
       <div class="cups-input-wrap">
         <button class="cups-btn" onclick="adjSweet('${key}',-1)">−</button>
@@ -936,13 +1086,70 @@ function renderSweets() {
 }
 
 function adjSweet(key, delta) {
-  sweetQtys[key] = Math.max(0, (sweetQtys[key] || 0) + delta);
-  g('sw-' + key).value = sweetQtys[key];
+  const newQty = Math.max(0, (sweetQtys[key]||0) + delta);
+  if (newQty > 0 && boothType === 'small') {
+    // Check if another sweet already has qty > 0
+    const otherActive = Object.keys(SWEETS).some(k => k !== key && (sweetQtys[k]||0) > 0);
+    if (otherActive) {
+      const errEl = g('err-pkg');
+      errEl.textContent = T[lang].errSmallSweets;
+      errEl.classList.add('show');
+      setTimeout(() => errEl.classList.remove('show'), 3000);
+      return;
+    }
+  }
+  sweetQtys[key] = newQty;
+  const el = g('sw-'+key); if (el) el.value = sweetQtys[key];
+  recalc();
+}
+function syncSweet(key) {
+  const newQty = Math.max(0, parseInt(g('sw-'+key).value)||0);
+  if (newQty > 0 && boothType === 'small') {
+    const otherActive = Object.keys(SWEETS).some(k => k !== key && (sweetQtys[k]||0) > 0);
+    if (otherActive) {
+      g('sw-'+key).value = 0;
+      const errEl = g('err-pkg');
+      errEl.textContent = T[lang].errSmallSweets;
+      errEl.classList.add('show');
+      setTimeout(() => errEl.classList.remove('show'), 3000);
+      return;
+    }
+  }
+  sweetQtys[key] = newQty;
   recalc();
 }
 
-function syncSweet(key) {
-  sweetQtys[key] = Math.max(0, parseInt(g('sw-' + key).value) || 0);
+// ── GATHERING (large booth only) ────────────────
+function renderGathering() {
+  const tr   = T[lang];
+  const list = g('gathering-list');
+  if (!list) return;
+  list.innerHTML = '';
+  Object.keys(GATHERING).forEach(key => {
+    const qty = gatheringQtys[key] || 0;
+    const row = document.createElement('div');
+    row.className = 'cups-row';
+    row.style.marginBottom = '10px';
+    row.innerHTML = `
+      <div class="cups-label">
+        <div style="font-weight:500;margin-bottom:2px">${tr.drinks[key]}</div>
+        <div style="font-size:11px;color:var(--text4)">${GATHERING[key].price} ${tr.sarUnit}</div>
+      </div>
+      <div class="cups-input-wrap">
+        <button class="cups-btn" onclick="adjGathering('${key}',-1)">−</button>
+        <input class="cups-val" id="ga-${key}" type="number" value="${qty}" min="0" step="1" oninput="syncGathering('${key}')"/>
+        <button class="cups-btn" onclick="adjGathering('${key}',1)">+</button>
+      </div>`;
+    list.appendChild(row);
+  });
+}
+function adjGathering(key, delta) {
+  gatheringQtys[key] = Math.max(0, (gatheringQtys[key]||0) + delta);
+  const el = g('ga-'+key); if (el) el.value = gatheringQtys[key];
+  recalc();
+}
+function syncGathering(key) {
+  gatheringQtys[key] = Math.max(0, parseInt(g('ga-'+key).value)||0);
   recalc();
 }
 
@@ -959,46 +1166,91 @@ function adjCups(delta) {
 }
 
 function recalc() {
-  const tr  = T[lang];
-  cups = Math.max(BOOTH[boothType].minCups, parseInt(g('cups-input').value)||BOOTH[boothType].minCups);
-  const bt  = BOOTH[boothType];
-  const isMix = selectedDrinks.length > 1;
-  const maxPrice = selectedDrinks.length ? Math.max(...selectedDrinks.map(k => ITEMS[k].price)) : 0;
+  const tr = T[lang];
+  const bt = BOOTH[boothType];
+  const waiterCost = waiter==='knock' ? bt.waiterKnock : waiter==='women' ? bt.waiterWomen : 0;
+  const sweetsCost = Object.keys(SWEETS).reduce((s,k) => s + (sweetQtys[k]||0)*SWEETS[k].price, 0);
+  const gatherCost = boothType==='large'
+    ? Object.keys(GATHERING).reduce((s,k) => s + (gatheringQtys[k]||0)*GATHERING[k].price, 0) : 0;
 
   let drinksRevenue = 0;
-  if (isMix) drinksRevenue = maxPrice * cups;
-  else if (selectedDrinks.length === 1) drinksRevenue = ITEMS[selectedDrinks[0]].price * cups;
+  let totalCups     = 0;
+  let activeDrinks  = [];
+  let maxPrice      = 0;
+  const lines       = [];
+  const pd          = g('price-display');
+  const mixNote     = g('mix-note');
 
-  const waiterCost = waiter==='knock' ? bt.waiterKnock : waiter==='women' ? bt.waiterWomen : 0;
-  const sweetsCost = Object.keys(SWEETS).reduce((sum, k) => sum + (sweetQtys[k]||0) * SWEETS[k].price, 0);
-  suggestedPrice = selectedDrinks.length ? Math.round(drinksRevenue + bt.di + waiterCost + bt.price + sweetsCost) : 0;
+  if (boothType === 'large') {
+    // Per-drink quantities; priced at highest selected drink rate
+    activeDrinks = BOOTH.large.drinkKeys.filter(k => (drinkQtys[k]||0) > 0);
+    totalCups    = activeDrinks.reduce((s,k) => s + (drinkQtys[k]||0), 0);
+    maxPrice     = activeDrinks.length ? Math.max(...activeDrinks.map(k => ITEMS[k].price)) : 0;
+    drinksRevenue = maxPrice * totalCups;
 
-  // Mix note
-  const mixNote = g('mix-note');
-  mixNote.style.display = isMix ? 'block' : 'none';
-  if (isMix) {
-    const topKey   = selectedDrinks.find(k => ITEMS[k].price === maxPrice);
-    const topDrink = tr.drinks[topKey];
-    mixNote.textContent = tr.mixNote(topDrink, maxPrice);
+    // Update auto-total display
+    const tcEl = g('large-total-cups');
+    if (tcEl) tcEl.textContent = totalCups + (lang==='ar' ? ' كوب' : ' cups');
+
+    // Mix note (multiple drink types)
+    if (activeDrinks.length > 1 && mixNote) {
+      const topKey   = activeDrinks.find(k => ITEMS[k].price === maxPrice);
+      mixNote.style.display = 'block';
+      mixNote.textContent   = tr.largePriceNote(maxPrice);
+    } else if (mixNote) {
+      mixNote.style.display = 'none';
+    }
+
+    // Build price lines per drink
+    activeDrinks.forEach(k => {
+      const q = drinkQtys[k];
+      lines.push({ label:`${tr.drinks[k]} × ${q} ${lang==='ar'?'كوب':'cups'} @ ${maxPrice} ${tr.sarUnit}`, val: maxPrice*q });
+    });
+
+    // Gathering lines
+    Object.keys(GATHERING).forEach(k => {
+      const qty = gatheringQtys[k]||0;
+      if (qty > 0) lines.push({ label: tr.gatherLine(tr.drinks[k], qty, GATHERING[k].price), val: qty*GATHERING[k].price });
+    });
+
+  } else {
+    // Small booth: toggle-based
+    cups = Math.max(bt.minCups, parseInt(g('cups-input').value)||bt.minCups);
+    activeDrinks  = selectedDrinks;
+    const isMix   = activeDrinks.length > 1;
+    maxPrice      = activeDrinks.length ? Math.max(...activeDrinks.map(k => ITEMS[k].price)) : 0;
+    drinksRevenue = maxPrice * cups;
+    totalCups     = cups;
+
+    if (mixNote) {
+      if (isMix) {
+        mixNote.style.display = 'block';
+        mixNote.textContent   = tr.mixNote(tr.drinks[activeDrinks.find(k=>ITEMS[k].price===maxPrice)], maxPrice);
+      } else { mixNote.style.display = 'none'; }
+    }
+    if (activeDrinks.length === 1)
+      lines.push({ label: tr.cupsLine(cups, ITEMS[activeDrinks[0]].price), val: drinksRevenue });
+    else if (isMix)
+      lines.push({ label: tr.cupsLineMix(cups, maxPrice), val: drinksRevenue });
   }
 
-  // Price display
-  const pd = g('price-display');
-  if (!selectedDrinks.length) {
+  if (!activeDrinks.length || totalCups === 0) {
     pd.innerHTML = `— <span>${tr.sarUnit}</span>`;
     g('price-lines').innerHTML = '';
+    suggestedPrice = 0;
+    g('w-knock-price').textContent = '+' + bt.waiterKnock + ' ' + tr.sarUnit;
+    g('w-women-price').textContent = '+' + bt.waiterWomen + ' ' + tr.sarUnit;
     return;
   }
-  pd.innerHTML = `${suggestedPrice.toLocaleString()} <span>${tr.sarUnit}</span>`;
 
-  const lines = [];
-  if (isMix) lines.push({label: tr.cupsLineMix(cups, maxPrice), val: maxPrice*cups});
-  else       lines.push({label: tr.cupsLine(cups, ITEMS[selectedDrinks[0]].price), val: drinksRevenue});
-  lines.push({label: tr.boothSetup, val: bt.di + bt.price});
-  if (waiterCost) lines.push({label: tr.waiterLabel, val: waiterCost});
+  suggestedPrice = Math.round(drinksRevenue + bt.di + bt.price + waiterCost + sweetsCost + gatherCost);
+  pd.innerHTML   = `${suggestedPrice.toLocaleString()} <span>${tr.sarUnit}</span>`;
+
+  lines.push({ label: tr.boothSetup, val: bt.di + bt.price });
+  if (waiterCost) lines.push({ label: tr.waiterLabel, val: waiterCost });
   Object.keys(SWEETS).forEach(k => {
-    const qty = sweetQtys[k] || 0;
-    if (qty > 0) lines.push({label: tr.sweetLine(tr.drinks[k], qty, SWEETS[k].price), val: qty * SWEETS[k].price});
+    const qty = sweetQtys[k]||0;
+    if (qty > 0) lines.push({ label: tr.sweetLine(tr.drinks[k], qty, SWEETS[k].price), val: qty*SWEETS[k].price });
   });
 
   g('price-lines').innerHTML = lines.map(l =>
@@ -1016,11 +1268,27 @@ function recalc() {
 function buildSummaryText() {
   const tr    = T[lang];
   const booth = tr.booth[boothType];
-  const names = selectedDrinks.map(k => tr.drinks[k]);
-  let text    = tr.pkgSummary(cups, names, booth);
-  const sweetParts = Object.keys(SWEETS)
-    .filter(k => (sweetQtys[k]||0) > 0)
-    .map(k => `${tr.drinks[k]} ×${sweetQtys[k]}`);
+  let text = '';
+
+  if (boothType === 'large') {
+    const active = BOOTH.large.drinkKeys.filter(k => (drinkQtys[k]||0) > 0);
+    const total  = active.reduce((s,k) => s+(drinkQtys[k]||0), 0);
+    const maxP   = active.length ? Math.max(...active.map(k => ITEMS[k].price)) : 0;
+    const parts  = active.map(k => `${tr.drinks[k]} ×${drinkQtys[k]}`);
+    text = lang === 'ar'
+      ? `باقة ضيافة القهوة: ${total} كوب (${parts.join('، ')})، ${booth}. سعر المزيج ${maxP} ر.س/كوب.`
+      : `Coffee Catering Package: ${total} Cups (${parts.join(', ')}), ${booth}. Mix rate ${maxP} SAR/cup.`;
+    // Gathering
+    const gParts = Object.keys(GATHERING).filter(k=>(gatheringQtys[k]||0)>0)
+      .map(k=>`${tr.drinks[k]} ×${gatheringQtys[k]}`);
+    if (gParts.length) text += ' ' + gParts.join(', ') + '.';
+  } else {
+    const names = selectedDrinks.map(k => tr.drinks[k]);
+    text = tr.pkgSummary(cups, names, booth);
+  }
+
+  const sweetParts = Object.keys(SWEETS).filter(k=>(sweetQtys[k]||0)>0)
+    .map(k=>`${tr.drinks[k]} ×${sweetQtys[k]}`);
   if (sweetParts.length) text += ' ' + sweetParts.join(', ') + '.';
   return text;
 }
@@ -1142,12 +1410,14 @@ function showSuccess(paid) {
 //  RESET
 // ═══════════════════════════════════════════════
 function resetForm() {
-  selectedDate = null; selectedDrinks = []; cups = 100;
+  selectedDate = null; selectedDrinks = []; cups = 30;
+  drinkQtys    = { v60:0, espresso:0, coffeeDay:0, matcha:0, hibiscus:0 };
+  gatheringQtys= { knockCake:0, vanillaPud:0, tiramisu:0, cheesecake:0 };
   waiter = 'knock'; boothType = 'large'; suggestedPrice = 0;
   sweetQtys = { brownie: 0, marshmallow: 0, churro: 0 };
   g('f-name').value = g('f-phone').value = g('f-start').value =
     g('f-end').value = g('f-location').value = g('f-notes').value = '';
-  g('cups-input').value = 100;
+  g('cups-input').value = 30;
   g('success').classList.remove('active');
   curStep = 1;
   g('panel-1').classList.add('active');
