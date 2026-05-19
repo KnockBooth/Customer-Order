@@ -760,7 +760,7 @@ async function loadBookedDates() {
   g('cal-loading').style.display = 'block';
   let fetchOk = false;
   try {
-    const res  = await fetch(SCRIPT_URL);
+    const res  = await fetch(SCRIPT_URL + '?mode=customer');
     const data = await res.json();
     if (Array.isArray(data)) {
       fetchOk = true;
