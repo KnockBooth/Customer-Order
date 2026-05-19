@@ -23,6 +23,7 @@
   --green:#3D6636;--green2:#4E7F43;
   --text:#1A0C04;--text2:#3D2010;--text3:#7A6A58;--text4:#B0A090;
   --red:#C0392B;--red2:#E74C3C;--r:12px;--rs:7px;
+  --overlay-bg:rgba(255,255,255,0.90);
 }
 
 /* ─── DARK MODE ─────────────────────────────── */
@@ -33,6 +34,7 @@
   --green:#6B7C45;--green2:#8A9E5A;
   --text:#F5F0E8;--text2:#C4A97D;--text3:#8A7A65;--text4:#5C4D3A;
   --red:#C0392B;--red2:#E74C3C;
+  --overlay-bg:rgba(30,22,16,0.92);
 }
 /* restore rgba tints in dark mode */
 .dark .booth-card.active,.dark .drink-card.selected,.dark .waiter-btn.active{background:rgba(196,169,125,.08)}
@@ -107,7 +109,12 @@ html[dir="rtl"] .cal-hd{letter-spacing:0}
 .cal-day.booked.partial::after{background:var(--yellow2)}
 .cal-day.selected{background:var(--accent);color:var(--bg);font-weight:700;border-color:var(--accent)}
 .cal-day.today{border-color:var(--border2)}
-.cal-loading{text-align:center;padding:20px;color:var(--text3);font-size:13px}
+/* Calendar loading overlay */
+.cal-overlay{position:absolute;inset:0;background:var(--overlay-bg);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);border-radius:var(--r);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:6}
+.cal-spinner{width:40px;height:40px;border:3px solid var(--border2);border-top-color:var(--accent2);border-radius:50%;animation:cal-spin .75s linear infinite}
+@keyframes cal-spin{to{transform:rotate(360deg)}}
+.cal-loading-text{font-size:13px;color:var(--text3);letter-spacing:.2px}
+html[dir="rtl"] .cal-loading-text{font-family:'Tajawal',sans-serif;letter-spacing:0}
 
 /* BOOTH */
 .booth-toggle{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px}
@@ -250,7 +257,11 @@ html[dir="rtl"] .btn{letter-spacing:0}
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="cal-card" style="position:relative">
+      <div id="cal-loading" class="cal-overlay" style="display:none">
+        <div class="cal-spinner"></div>
+        <div class="cal-loading-text" data-i18n="loadingAvail">جارٍ تحميل المواعيد</div>
+      </div>
       <div class="cal-nav">
         <button class="cal-arrow" onclick="prevMonth()" id="cal-prev">‹</button>
         <div class="cal-month" id="cal-month-label"></div>
@@ -258,9 +269,6 @@ html[dir="rtl"] .btn{letter-spacing:0}
       </div>
       <div class="cal-grid" id="cal-grid">
         <div id="cal-days" style="display:contents"></div>
-      </div>
-      <div id="cal-loading" class="cal-loading" style="display:none">
-        <span data-i18n="loadingAvail">جارٍ تحميل المواعيد</span><span class="loading-dots"></span>
       </div>
     </div>
     <div class="legend">
@@ -622,6 +630,7 @@ let lang           = localStorage.getItem('knock_lang') || 'ar';
 let curStep        = 1;
 let calDate        = new Date();
 let selectedDate   = null;
+let calLoading     = false;   // true while fetching availability — blocks date picking
 let bookedMap      = {}; // { 'YYYY-MM-DD': ['large','small'] }
 let boothType      = 'large';
 let selectedDrinks = [];  // small booth: selected drink keys
@@ -726,7 +735,7 @@ function goStep(n) {
 }
 
 function tryStep2() {
-  if (!selectedDate) return;
+  if (calLoading || !selectedDate) return;
   if ((bookedMap[selectedDate] || []).includes(boothType)) {
     selectedDate = null;
     g('btn-step1').disabled = true;
@@ -843,7 +852,8 @@ function renderCalendar() {
       // Available for this booth; mark yellow if the OTHER booth is taken
       if (oneBooked) el.classList.add('partial');
       if (ds === selectedDate) el.classList.add('selected');
-      el.onclick = () => pickDay(ds);
+      if (!calLoading) el.onclick = () => pickDay(ds);
+      else el.style.cursor = 'default';
     }
     container.appendChild(el);
   }
@@ -888,7 +898,12 @@ function normalizeDateStr(raw) {
 }
 
 async function loadBookedDates() {
-  g('cal-loading').style.display = 'block';
+  calLoading = true;
+  g('cal-loading').style.display = 'flex';
+  // Update overlay text in current language
+  const txtEl = g('cal-loading').querySelector('.cal-loading-text');
+  if (txtEl) txtEl.textContent = T[lang].loadingAvail;
+  renderCalendar(); // re-render so no onclick is attached while loading
   let fetchOk = false;
   try {
     const res  = await fetch(SCRIPT_URL + '?mode=customer');
@@ -917,6 +932,7 @@ async function loadBookedDates() {
     }
   } catch(e) { console.warn('loadBookedDates failed:', e); }
 
+  calLoading = false;
   g('cal-loading').style.display = 'none';
 
   const errEl = g('err-date-booked');
