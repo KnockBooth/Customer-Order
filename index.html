@@ -101,9 +101,9 @@ html[dir="rtl"] .cal-hd{letter-spacing:0}
 .cal-day:hover:not(.past):not(.booked){background:var(--surface2);border-color:var(--border)}
 .cal-day.past{color:var(--text4);cursor:default;opacity:.4}
 .cal-day.booked{color:var(--text4);cursor:not-allowed}
-.cal-day.booked::after{content:'';position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--red2)}
+.cal-day.booked::after{content:'';position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:var(--red2)}
 /* one booth booked → yellow dot (overrides red, whether selectable or not) */
-.cal-day.partial::after{content:'';position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--yellow2)}
+.cal-day.partial::after{content:'';position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:var(--yellow2)}
 .cal-day.booked.partial::after{background:var(--yellow2)}
 .cal-day.selected{background:var(--accent);color:var(--bg);font-weight:700;border-color:var(--accent)}
 .cal-day.today{border-color:var(--border2)}
@@ -205,6 +205,10 @@ html[dir="rtl"] .btn{letter-spacing:0}
 .large-total-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0 0;margin-top:4px;border-top:1px solid var(--border);font-size:13px;font-weight:600;color:var(--text2)}
 /* Limit notices */
 .limit-note{font-size:12px;color:var(--accent2);padding:8px 10px;background:rgba(44,20,8,.06);border:1px solid var(--border);border-radius:var(--rs);margin-bottom:10px;line-height:1.5}
+/* Large booth pricing mode toggle */
+.large-mode-toggle{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-bottom:14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:3px}
+.mode-btn{padding:8px 6px;border:none;border-radius:calc(var(--rs) - 2px);background:transparent;color:var(--text3);font-size:12px;cursor:pointer;transition:all .15s;font-family:inherit;font-weight:500;line-height:1.3}
+.mode-btn.active{background:var(--surface);color:var(--accent2);box-shadow:0 1px 3px rgba(0,0,0,.1)}
 </style>
 </head>
 <body>
@@ -468,7 +472,7 @@ const T = {
     mixNote:(drink,price)=>`☕ تسعير المزيج — يُحتسب بسعر ${drink} (${price} ر.س/كوب)`,
     cupsLine:(cups,price)=>`${cups} كوب × ${price} ر.س`,
     cupsLineMix:(cups,price)=>`${cups} كوب (مزيج · ${price} ر.س/كوب)`,
-    boothSetup:'البوث والإعداد', waiterLabel:'النادل', totalLabel:'الإجمالي',
+    boothSetup:'البوث والإعداد', boothFeeLabel:'رسوم البوث', diLabel:'التوصيل والتركيب', waiterLabel:'النادل', totalLabel:'الإجمالي',
     perCup:'ر.س / كوب',
     s3Title:'بياناتك', s3Sub:'أخبرنا عن فعاليتك لنتمكن من التحضير.',
     labelName:'الاسم الكامل *', labelPhone:'رقم الهاتف *',
@@ -500,6 +504,8 @@ const T = {
     errSmallSweets:'البوث الصغير يدعم نوع حلى واحد فقط.',
     gatherTitle:'تجمعات', gatherLine:(name,qty,price)=>`${name} ×${qty} — ${qty*price} ر.س`,
     largePriceNote: top => `سعر المزيج يُحتسب بأعلى سعر (${top} ر.س/كوب)`,
+    modeIndividual:'سعر كل نوع على حدة',
+    modeMix:'مزيج — سعر موحد',
     drinks:{
       v60:'V60', espresso:'إسبريسو', coffeeDay:'قهوة اليوم',
       matcha:'ماتشا', hibiscus:'كركديه', brownie:'براونيز',
@@ -537,7 +543,7 @@ const T = {
     mixNote:(drink,price)=>`☕ Mix pricing — billed at ${drink} rate (${price} SAR/cup)`,
     cupsLine:(cups,price)=>`${cups} cups × ${price} SAR`,
     cupsLineMix:(cups,price)=>`${cups} cups (mix · ${price} SAR/cup)`,
-    boothSetup:'Booth & setup', waiterLabel:'Waiter', totalLabel:'Total',
+    boothSetup:'Booth & setup', boothFeeLabel:'Booth fee', diLabel:'Delivery & Installation', waiterLabel:'Waiter', totalLabel:'Total',
     perCup:'SAR / cup',
     s3Title:'Your details', s3Sub:'Tell us about your event so we can prepare.',
     labelName:'Full name *', labelPhone:'Phone number *',
@@ -569,6 +575,8 @@ const T = {
     errSmallSweets:'Small booth allows 1 sweet type only.',
     gatherTitle:'Gatherings', gatherLine:(name,qty,price)=>`${name} ×${qty} — ${qty*price} SAR`,
     largePriceNote: top => `Mix priced at highest rate (${top} SAR/cup)`,
+    modeIndividual:'Per-drink pricing',
+    modeMix:'Mix — one price',
     drinks:{
       v60:'V60', espresso:'Espresso', coffeeDay:'Coffee of the Day',
       matcha:'Matcha', hibiscus:'Hibiscus', brownie:'Brownie Bites',
@@ -618,7 +626,10 @@ let bookedMap      = {}; // { 'YYYY-MM-DD': ['large','small'] }
 let boothType      = 'large';
 let selectedDrinks = [];  // small booth: selected drink keys
 let cups           = 30;  // small booth: total cups
-let drinkQtys      = { v60:0, espresso:0, coffeeDay:0, matcha:0, hibiscus:0 }; // large booth
+let drinkQtys      = { v60:0, espresso:0, coffeeDay:0, matcha:0, hibiscus:0 }; // large booth individual mode
+let largeMixMode   = false;   // large booth: false=individual pricing, true=mix (total cups × max price)
+let largeMixDrinks = [];      // large booth mix mode: selected drink types
+let largeMixCups   = 100;     // large booth mix mode: total cups
 let waiter         = 'knock'; // large booth default (cannot be 'none')
 let sweetQtys      = { brownie: 0, marshmallow: 0, churro: 0 };
 let gatheringQtys  = { knockCake: 0, vanillaPud: 0, tiramisu: 0, cheesecake: 0 };
@@ -734,8 +745,12 @@ function tryStep3() {
   g('err-pkg').classList.remove('show');
   let valid = true;
   if (boothType === 'large') {
-    const totalCups = BOOTH.large.drinkKeys.reduce((s,k) => s+(drinkQtys[k]||0), 0);
-    if (totalCups < BOOTH.large.minCups) valid = false;
+    if (largeMixMode) {
+      if (!largeMixDrinks.length || largeMixCups < BOOTH.large.minCups) valid = false;
+    } else {
+      const totalCups = BOOTH.large.drinkKeys.reduce((s,k) => s+(drinkQtys[k]||0), 0);
+      if (totalCups < BOOTH.large.minCups) valid = false;
+    }
   } else {
     if (!selectedDrinks.length || cups < BOOTH.small.minCups) valid = false;
   }
@@ -933,8 +948,10 @@ function setBooth(type) {
   g('bt-small').classList.toggle('active', type === 'small');
 
   // Clear drink state when switching
+  largeMixMode = false; largeMixDrinks = []; largeMixCups = BOOTH.large.minCups;
   if (type === 'large') {
     selectedDrinks = [];
+    drinkQtys = { v60:0, espresso:0, coffeeDay:0, matcha:0, hibiscus:0 };
     cups = BOOTH.large.minCups;
   } else {
     drinkQtys = { v60:0, espresso:0, coffeeDay:0, matcha:0, hibiscus:0 };
@@ -991,30 +1008,72 @@ function setBooth(type) {
   recalc();
 }
 
-// ── LARGE BOOTH: per-drink quantity rows ────────
+// ── LARGE BOOTH: per-drink quantity rows (individual) or mix mode ────────
 function renderDrinks() {
   const tr   = T[lang];
   const grid = g('drinks-grid');
   grid.innerHTML = '';
 
   if (boothType === 'large') {
-    // Qty spinner for each drink
-    BOOTH.large.drinkKeys.forEach(key => {
-      const qty = drinkQtys[key] || 0;
-      const row = document.createElement('div');
-      row.className = 'drink-qty-row';
-      row.innerHTML = `
-        <div class="dqr-info">
-          <div class="dqr-name">${tr.drinks[key]}</div>
-          <div class="dqr-price">${ITEMS[key].price} ${tr.sarUnit} / ${lang==='ar'?'كوب':'cup'}</div>
+    // ── Mode toggle ──
+    const toggle = document.createElement('div');
+    toggle.className = 'large-mode-toggle';
+    toggle.innerHTML = `
+      <button class="mode-btn${!largeMixMode?' active':''}" onclick="setLargeMode(false)">${tr.modeIndividual}</button>
+      <button class="mode-btn${largeMixMode?' active':''}"  onclick="setLargeMode(true)">${tr.modeMix}</button>`;
+    grid.appendChild(toggle);
+
+    if (!largeMixMode) {
+      // Individual: qty spinner per drink, each at its own price
+      BOOTH.large.drinkKeys.forEach(key => {
+        const qty = drinkQtys[key] || 0;
+        const row = document.createElement('div');
+        row.className = 'drink-qty-row';
+        row.innerHTML = `
+          <div class="dqr-info">
+            <div class="dqr-name">${tr.drinks[key]}</div>
+            <div class="dqr-price">${ITEMS[key].price} ${tr.sarUnit} / ${lang==='ar'?'كوب':'cup'}</div>
+          </div>
+          <div class="cups-input-wrap">
+            <button class="cups-btn" onclick="adjDrinkQty('${key}',-5)">−</button>
+            <input class="cups-val" id="dq-${key}" type="number" value="${qty}" min="0" step="5" oninput="syncDrinkQty('${key}')"/>
+            <button class="cups-btn" onclick="adjDrinkQty('${key}',5)">+</button>
+          </div>`;
+        grid.appendChild(row);
+      });
+    } else {
+      // Mix: total cups input + drink type toggle cards (priced at highest selected)
+      const cupsRow = document.createElement('div');
+      cupsRow.className = 'cups-row';
+      cupsRow.style.cssText = 'margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)';
+      cupsRow.innerHTML = `
+        <div class="cups-label">
+          <div style="font-weight:500;margin-bottom:2px">${tr.totalCups}</div>
+          <div style="font-size:11px;color:var(--text4)">${lang==='ar'?`الحد الأدنى ${BOOTH.large.minCups} كوب`:`Minimum ${BOOTH.large.minCups} cups`}</div>
         </div>
         <div class="cups-input-wrap">
-          <button class="cups-btn" onclick="adjDrinkQty('${key}',-5)">−</button>
-          <input class="cups-val" id="dq-${key}" type="number" value="${qty}" min="0" step="5" oninput="syncDrinkQty('${key}')"/>
-          <button class="cups-btn" onclick="adjDrinkQty('${key}',5)">+</button>
+          <button class="cups-btn" onclick="adjMixCups(-10)">−</button>
+          <input class="cups-val" id="mix-cups-input" type="number" value="${largeMixCups}" min="${BOOTH.large.minCups}" step="10" oninput="syncMixCups()"/>
+          <button class="cups-btn" onclick="adjMixCups(10)">+</button>
         </div>`;
-      grid.appendChild(row);
-    });
+      grid.appendChild(cupsRow);
+
+      const drinkGrid = document.createElement('div');
+      drinkGrid.className = 'drinks-grid';
+      drinkGrid.style.marginBottom = '0';
+      BOOTH.large.drinkKeys.forEach(key => {
+        const on   = largeMixDrinks.includes(key);
+        const card = document.createElement('div');
+        card.className = 'drink-card' + (on ? ' selected' : '');
+        card.innerHTML = `<div class="drink-check">${on ? '✓' : ''}</div>
+          <div class="drink-name">${tr.drinks[key]}</div>
+          <div class="drink-price">${ITEMS[key].price} ${tr.sarUnit} / ${lang==='ar'?'كوب':'cup'}</div>`;
+        card.onclick = () => toggleMixDrink(key);
+        drinkGrid.appendChild(card);
+      });
+      grid.appendChild(drinkGrid);
+    }
+
   } else {
     // Small booth: toggle cards, max 2
     grid.className = 'drinks-grid';
@@ -1038,6 +1097,28 @@ function adjDrinkQty(key, delta) {
 }
 function syncDrinkQty(key) {
   drinkQtys[key] = Math.max(0, parseInt(g('dq-'+key).value)||0);
+  recalc();
+}
+
+// ── Large booth mode helpers ─────────────────
+function setLargeMode(isMix) {
+  largeMixMode = isMix;
+  renderDrinks();
+  recalc();
+}
+function toggleMixDrink(key) {
+  const idx = largeMixDrinks.indexOf(key);
+  if (idx > -1) largeMixDrinks.splice(idx, 1);
+  else largeMixDrinks.push(key);
+  renderDrinks(); recalc();
+}
+function adjMixCups(delta) {
+  largeMixCups = Math.max(BOOTH.large.minCups, (parseInt(g('mix-cups-input').value)||BOOTH.large.minCups) + delta);
+  const el = g('mix-cups-input'); if (el) el.value = largeMixCups;
+  recalc();
+}
+function syncMixCups() {
+  largeMixCups = Math.max(BOOTH.large.minCups, parseInt(g('mix-cups-input').value)||BOOTH.large.minCups);
   recalc();
 }
 
@@ -1182,30 +1263,37 @@ function recalc() {
   const mixNote     = g('mix-note');
 
   if (boothType === 'large') {
-    // Per-drink quantities; priced at highest selected drink rate
-    activeDrinks = BOOTH.large.drinkKeys.filter(k => (drinkQtys[k]||0) > 0);
-    totalCups    = activeDrinks.reduce((s,k) => s + (drinkQtys[k]||0), 0);
-    maxPrice     = activeDrinks.length ? Math.max(...activeDrinks.map(k => ITEMS[k].price)) : 0;
-    drinksRevenue = maxPrice * totalCups;
+    if (largeMixMode) {
+      // Mix mode: total cups × highest price of selected drink types
+      activeDrinks  = largeMixDrinks;
+      totalCups     = largeMixCups;
+      maxPrice      = activeDrinks.length ? Math.max(...activeDrinks.map(k => ITEMS[k].price)) : 0;
+      drinksRevenue = maxPrice * totalCups;
+      if (activeDrinks.length) {
+        const namesStr = activeDrinks.map(k => tr.drinks[k]).join(lang==='ar'?'، ':', ');
+        lines.push({ label:`${totalCups} ${lang==='ar'?'كوب':'cups'} (${namesStr}) × ${maxPrice} ${tr.sarUnit}`, val: drinksRevenue });
+      }
+      // Show mix note
+      if (mixNote && activeDrinks.length > 0) {
+        mixNote.style.display = 'block';
+        mixNote.textContent   = tr.largePriceNote(maxPrice);
+      } else if (mixNote) { mixNote.style.display = 'none'; }
+    } else {
+      // Individual mode: each drink at its own price
+      activeDrinks  = BOOTH.large.drinkKeys.filter(k => (drinkQtys[k]||0) > 0);
+      totalCups     = activeDrinks.reduce((s,k) => s + (drinkQtys[k]||0), 0);
+      drinksRevenue = activeDrinks.reduce((s,k) => s + (drinkQtys[k]||0)*ITEMS[k].price, 0);
+      maxPrice      = activeDrinks.length ? Math.max(...activeDrinks.map(k => ITEMS[k].price)) : 0;
+      activeDrinks.forEach(k => {
+        const q = drinkQtys[k];
+        lines.push({ label:`${tr.drinks[k]} × ${q} ${lang==='ar'?'كوب':'cups'} @ ${ITEMS[k].price} ${tr.sarUnit}`, val: ITEMS[k].price*q });
+      });
+      if (mixNote) mixNote.style.display = 'none';
+    }
 
     // Update auto-total display
     const tcEl = g('large-total-cups');
     if (tcEl) tcEl.textContent = totalCups + (lang==='ar' ? ' كوب' : ' cups');
-
-    // Mix note (multiple drink types)
-    if (activeDrinks.length > 1 && mixNote) {
-      const topKey   = activeDrinks.find(k => ITEMS[k].price === maxPrice);
-      mixNote.style.display = 'block';
-      mixNote.textContent   = tr.largePriceNote(maxPrice);
-    } else if (mixNote) {
-      mixNote.style.display = 'none';
-    }
-
-    // Build price lines per drink
-    activeDrinks.forEach(k => {
-      const q = drinkQtys[k];
-      lines.push({ label:`${tr.drinks[k]} × ${q} ${lang==='ar'?'كوب':'cups'} @ ${maxPrice} ${tr.sarUnit}`, val: maxPrice*q });
-    });
 
     // Gathering lines
     Object.keys(GATHERING).forEach(k => {
@@ -1246,7 +1334,8 @@ function recalc() {
   suggestedPrice = Math.round(drinksRevenue + bt.di + bt.price + waiterCost + sweetsCost + gatherCost);
   pd.innerHTML   = `${suggestedPrice.toLocaleString()} <span>${tr.sarUnit}</span>`;
 
-  lines.push({ label: tr.boothSetup, val: bt.di + bt.price });
+  lines.push({ label: tr.boothFeeLabel, val: bt.price });
+  lines.push({ label: tr.diLabel, val: bt.di });
   if (waiterCost) lines.push({ label: tr.waiterLabel, val: waiterCost });
   Object.keys(SWEETS).forEach(k => {
     const qty = sweetQtys[k]||0;
@@ -1271,13 +1360,20 @@ function buildSummaryText() {
   let text = '';
 
   if (boothType === 'large') {
-    const active = BOOTH.large.drinkKeys.filter(k => (drinkQtys[k]||0) > 0);
-    const total  = active.reduce((s,k) => s+(drinkQtys[k]||0), 0);
-    const maxP   = active.length ? Math.max(...active.map(k => ITEMS[k].price)) : 0;
-    const parts  = active.map(k => `${tr.drinks[k]} ×${drinkQtys[k]}`);
-    text = lang === 'ar'
-      ? `باقة ضيافة القهوة: ${total} كوب (${parts.join('، ')})، ${booth}. سعر المزيج ${maxP} ر.س/كوب.`
-      : `Coffee Catering Package: ${total} Cups (${parts.join(', ')}), ${booth}. Mix rate ${maxP} SAR/cup.`;
+    if (largeMixMode) {
+      const mixNames = largeMixDrinks.map(k => tr.drinks[k]);
+      const maxP     = largeMixDrinks.length ? Math.max(...largeMixDrinks.map(k=>ITEMS[k].price)) : 0;
+      text = lang === 'ar'
+        ? `باقة ضيافة القهوة: ${largeMixCups} كوب مزيج (${mixNames.join('، ')})، ${booth}. سعر ${maxP} ر.س/كوب.`
+        : `Coffee Catering Package: ${largeMixCups} Cups mix (${mixNames.join(', ')}), ${booth}. Rate ${maxP} SAR/cup.`;
+    } else {
+      const active = BOOTH.large.drinkKeys.filter(k => (drinkQtys[k]||0) > 0);
+      const total  = active.reduce((s,k) => s+(drinkQtys[k]||0), 0);
+      const parts  = active.map(k => `${tr.drinks[k]} ×${drinkQtys[k]} @ ${ITEMS[k].price}`);
+      text = lang === 'ar'
+        ? `باقة ضيافة القهوة: ${total} كوب (${parts.join('، ')})، ${booth}.`
+        : `Coffee Catering Package: ${total} Cups (${parts.join(', ')}), ${booth}.`;
+    }
     // Gathering
     const gParts = Object.keys(GATHERING).filter(k=>(gatheringQtys[k]||0)>0)
       .map(k=>`${tr.drinks[k]} ×${gatheringQtys[k]}`);
@@ -1413,6 +1509,7 @@ function resetForm() {
   selectedDate = null; selectedDrinks = []; cups = 30;
   drinkQtys    = { v60:0, espresso:0, coffeeDay:0, matcha:0, hibiscus:0 };
   gatheringQtys= { knockCake:0, vanillaPud:0, tiramisu:0, cheesecake:0 };
+  largeMixMode = false; largeMixDrinks = []; largeMixCups = BOOTH.large.minCups;
   waiter = 'knock'; boothType = 'large'; suggestedPrice = 0;
   sweetQtys = { brownie: 0, marshmallow: 0, churro: 0 };
   g('f-name').value = g('f-phone').value = g('f-start').value =
