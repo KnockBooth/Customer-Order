@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>احجز نوك — ضيافة القهوة</title>
+<script>if(localStorage.getItem('knock_theme')==='dark')document.documentElement.classList.add('dark')</script>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet"/>
 
 <!-- ── MOYASAR (Payment) ─────────────────────────────────────────
@@ -16,13 +17,31 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0d0b08;--surface:#1e1610;--surface2:#261d13;
-  --border:#3d2d1e;--border2:#4a3825;
-  --accent:#c4a97d;--accent2:#d4bc96;--accent3:#e8d5b0;
-  --green:#6b7c45;--green2:#8a9e5a;
-  --text:#f5f0e8;--text2:#c4a97d;--text3:#8a7a65;--text4:#5c4d3a;
-  --red:#c0392b;--red2:#e74c3c;--r:12px;--rs:7px;
+  --bg:#EAE4D2;--surface:#FFFFFF;--surface2:#F4EFE4;
+  --border:#D5CEBC;--border2:#C4BAA6;
+  --accent:#2C1408;--accent2:#5C3320;--accent3:#8B5E40;
+  --green:#3D6636;--green2:#4E7F43;
+  --text:#1A0C04;--text2:#3D2010;--text3:#7A6A58;--text4:#B0A090;
+  --red:#C0392B;--red2:#E74C3C;--r:12px;--rs:7px;
 }
+
+/* ─── DARK MODE ─────────────────────────────── */
+.dark{
+  --bg:#0D0B08;--surface:#1E1610;--surface2:#261D13;
+  --border:#3D2D1E;--border2:#4A3825;
+  --accent:#C4A97D;--accent2:#D4BC96;--accent3:#E8D5B0;
+  --green:#6B7C45;--green2:#8A9E5A;
+  --text:#F5F0E8;--text2:#C4A97D;--text3:#8A7A65;--text4:#5C4D3A;
+  --red:#C0392B;--red2:#E74C3C;
+}
+/* restore rgba tints in dark mode */
+.dark .booth-card.active,.dark .drink-card.selected,.dark .waiter-btn.active{background:rgba(196,169,125,.08)}
+/* logo wrapper */
+.logo-bg{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--accent);border-radius:9px;padding:5px 10px;transition:background .2s}
+.dark .logo-bg{background:transparent;padding:0}
+/* theme toggle */
+.theme-btn{padding:5px 10px;border:1px solid var(--border2);border-radius:20px;background:transparent;color:var(--text3);font-size:15px;cursor:pointer;transition:all .15s;flex-shrink:0;line-height:1}
+.theme-btn:hover{border-color:var(--accent);color:var(--accent)}
 
 /* ── FONTS ── */
 html[dir="ltr"] body { font-family:'DM Sans',sans-serif; }
@@ -92,7 +111,7 @@ html[dir="rtl"] .cal-hd{letter-spacing:0}
 .booth-toggle{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px}
 .booth-card{padding:16px;border:1.5px solid var(--border);border-radius:var(--r);cursor:pointer;transition:all .15s;text-align:center}
 .booth-card:hover{border-color:var(--border2)}
-.booth-card.active{border-color:var(--accent);background:rgba(196,169,125,.08)}
+.booth-card.active{border-color:var(--accent);background:rgba(44,20,8,.07)}
 .booth-card h3{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;margin-bottom:4px}
 .booth-card p{font-size:11px;color:var(--text3)}
 
@@ -100,7 +119,7 @@ html[dir="rtl"] .cal-hd{letter-spacing:0}
 .drinks-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
 .drink-card{padding:12px 14px;border:1.5px solid var(--border);border-radius:var(--rs);cursor:pointer;transition:all .15s;position:relative}
 .drink-card:hover{border-color:var(--border2)}
-.drink-card.selected{border-color:var(--accent);background:rgba(196,169,125,.08)}
+.drink-card.selected{border-color:var(--accent);background:rgba(44,20,8,.07)}
 .drink-name{font-size:13px;font-weight:500;margin-bottom:2px}
 .drink-price{font-size:11px;color:var(--text3)}
 .drink-check{position:absolute;top:8px;inset-inline-end:8px;width:16px;height:16px;border-radius:50%;border:1.5px solid var(--border);background:transparent;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--accent);transition:all .15s}
@@ -120,7 +139,7 @@ html[dir="rtl"] .cal-hd{letter-spacing:0}
 .waiter-btn{padding:8px 6px;border:1px solid var(--border);border-radius:var(--rs);background:transparent;color:var(--text3);font-size:11px;cursor:pointer;transition:all .15s;text-align:center;font-family:inherit;line-height:1.4}
 html[dir="rtl"] .waiter-btn{font-size:12px}
 .waiter-btn:hover{border-color:var(--border2);color:var(--text)}
-.waiter-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(196,169,125,.08)}
+.waiter-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(44,20,8,.07)}
 
 /* PRICE BOX */
 .price-box{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r);padding:18px;margin-top:4px}
@@ -179,8 +198,11 @@ html[dir="rtl"] .btn{letter-spacing:0}
 <body>
 
 <header>
-  <img src="knock1.png" style="height:38px;width:auto;object-fit:contain"/>
+  <div class="logo-bg">
+    <img src="knock1.png" style="height:34px;width:auto;object-fit:contain"/>
+  </div>
   <span class="logo-sub" data-i18n="logoSub">ضيافة القهوة</span>
+  <button class="theme-btn" id="theme-toggle" onclick="toggleTheme()" title="تبديل المظهر">🌙</button>
   <button class="lang-btn" onclick="toggleLang()" id="lang-btn">English</button>
 </header>
 
@@ -357,6 +379,21 @@ html[dir="rtl"] .btn{letter-spacing:0}
 </main>
 
 <script>
+// ─── THEME ────────────────────────────────────
+function applyTheme(dark){
+  document.documentElement.classList.toggle('dark',dark);
+  const btn=document.getElementById('theme-toggle');
+  if(btn) btn.textContent=dark?'☀️':'🌙';
+  localStorage.setItem('knock_theme',dark?'dark':'light');
+}
+function toggleTheme(){ applyTheme(!document.documentElement.classList.contains('dark')); }
+// sync button icon on load
+document.addEventListener('DOMContentLoaded',function(){
+  const saved=localStorage.getItem('knock_theme');
+  const btn=document.getElementById('theme-toggle');
+  if(btn) btn.textContent=(saved==='dark')?'☀️':'🌙';
+});
+
 // ═══════════════════════════════════════════════
 //  CONFIG
 // ═══════════════════════════════════════════════
